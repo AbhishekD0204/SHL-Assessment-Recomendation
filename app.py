@@ -140,6 +140,59 @@ def search():
             'error': str(e)
         }), 500
 
+@app.route('/api/text', methods=['GET', 'POST'])
+def text_query():
+    """
+    Simple endpoint that accepts plain text queries and returns JSON.
+    Works with both GET (query parameter) and POST (form or plain text body).
+    """
+    try:
+        # Handle different request types
+        if request.method == 'GET':
+            user_query = request.args.get('query', '')
+        elif request.content_type and 'application/json' in request.content_type:
+            data = request.get_json(silent=True) or {}
+            user_query = data.get('query', '')
+        elif request.content_type and 'application/x-www-form-urlencoded' in request.content_type:
+            user_query = request.form.get('query', '')
+        else:
+            # For plain text POST body
+            user_query = request.get_data(as_text=True)
+            
+        # Get limit parameter
+        try:
+            limit = request.args.get('limit', 4)
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 4
+            
+        if not user_query.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Query cannot be empty'
+            }), 400
+            
+        # Ensure RAG engine is initialized
+        if rag_engine is None:
+            initialize_rag()
+            
+        # Get recommendations
+        recommendations = rag_engine.get_recommendations(user_query, top_k=limit)
+        
+        return jsonify({
+            'success': True,
+            'query': user_query,
+            'count': len(recommendations),
+            'recommendations': recommendations
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing text query: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # API Documentation endpoint
 @app.route('/api', methods=['GET'])
 def api_documentation():
@@ -164,6 +217,25 @@ def api_documentation():
                     {'name': 'top_k', 'type': 'integer', 'required': False, 'default': 4, 'description': 'Maximum number of results to return'}
                 ],
                 'example_body': {'query': 'leadership assessment', 'top_k': 5}
+            },
+            {
+                'name': 'GET/POST /api/text',
+                'description': 'Flexible endpoint that accepts plain text queries in multiple formats',
+                'methods': ['GET', 'POST'],
+                'notes': 'This endpoint is versatile and accepts queries in several formats: GET parameter, POST form, JSON body, or raw text body',
+                'parameters': [
+                    {'name': 'query', 'type': 'string', 'required': True, 'description': 'Search query text (GET parameter)'},
+                    {'name': 'limit', 'type': 'integer', 'required': False, 'default': 4, 'description': 'Maximum number of results to return'}
+                ],
+                'post_formats': [
+                    {'content_type': 'application/json', 'example': '{"query": "leadership assessment"}'},
+                    {'content_type': 'application/x-www-form-urlencoded', 'example': 'query=leadership+assessment'},
+                    {'content_type': 'text/plain', 'example': 'leadership assessment'}
+                ],
+                'examples': [
+                    'GET /api/text?query=leadership%20assessment&limit=3',
+                    'POST /api/text with raw text body "leadership assessment"'
+                ]
             }
         ]
     }
