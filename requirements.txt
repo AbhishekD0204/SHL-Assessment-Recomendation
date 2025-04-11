@@ -1,0 +1,8 @@
+flask
+flask-sqlalchemy
+gunicorn
+numpy
+scikit-learn
+beautifulsoup4
+requests
+trafilatura
