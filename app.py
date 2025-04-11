@@ -72,6 +72,7 @@ def query():
         # Get the query from the request
         data = request.get_json()
         user_query = data.get('query', '')
+        top_k = data.get('top_k', 4)  # Allow customizing number of results
         
         if not user_query.strip():
             return jsonify({
@@ -84,7 +85,7 @@ def query():
             initialize_rag()
         
         # Get recommendations
-        recommendations = rag_engine.get_recommendations(user_query, top_k=4)
+        recommendations = rag_engine.get_recommendations(user_query, top_k=top_k)
         
         return jsonify({
             'success': True,
@@ -98,6 +99,75 @@ def query():
             'success': False,
             'error': str(e)
         }), 500
+
+@app.route('/api/search', methods=['GET'])
+def search():
+    try:
+        # Get query from URL parameters
+        user_query = request.args.get('q', '')
+        top_k = request.args.get('limit', 4)
+        
+        # Convert top_k to integer with error handling
+        try:
+            top_k = int(top_k)
+        except (ValueError, TypeError):
+            top_k = 4
+            
+        if not user_query.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Query parameter q cannot be empty'
+            }), 400
+            
+        # Ensure RAG engine is initialized
+        if rag_engine is None:
+            initialize_rag()
+            
+        # Get recommendations
+        recommendations = rag_engine.get_recommendations(user_query, top_k=top_k)
+        
+        return jsonify({
+            'success': True,
+            'query': user_query,
+            'count': len(recommendations),
+            'recommendations': recommendations
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing search query: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# API Documentation endpoint
+@app.route('/api', methods=['GET'])
+def api_documentation():
+    """Provide simple API documentation."""
+    api_docs = {
+        'version': '1.0',
+        'endpoints': [
+            {
+                'name': 'GET /api/search',
+                'description': 'Search for SHL assessment recommendations using GET method',
+                'parameters': [
+                    {'name': 'q', 'type': 'string', 'required': True, 'description': 'Search query text'},
+                    {'name': 'limit', 'type': 'integer', 'required': False, 'default': 4, 'description': 'Maximum number of results to return'}
+                ],
+                'example': '/api/search?q=leadership%20assessment&limit=5'
+            },
+            {
+                'name': 'POST /api/query',
+                'description': 'Search for SHL assessment recommendations using POST method with JSON body',
+                'body_parameters': [
+                    {'name': 'query', 'type': 'string', 'required': True, 'description': 'Search query text'},
+                    {'name': 'top_k', 'type': 'integer', 'required': False, 'default': 4, 'description': 'Maximum number of results to return'}
+                ],
+                'example_body': {'query': 'leadership assessment', 'top_k': 5}
+            }
+        ]
+    }
+    return jsonify(api_docs)
 
 # App is initialized with app_context above
 
